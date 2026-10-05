@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>像素画转换器 - 一键把图片变成像素画</title>
+<meta name="description" content="免费在线像素画转换器，一键将照片转换为复古像素风格，支持像素大小与颜色数量调节，PNG / SVG 导出，全程本地处理不上传。">
+<link rel="stylesheet" href="css/style.css">
+<script>
+  // 提前应用已保存的主题，避免首屏闪烁
+  (function () {
+    try {
+      var t = localStorage.getItem('pixeltool-theme');
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) { /* 隐私模式下忽略 */ }
+  })();
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <div class="logo">
+      <span class="logo-mark"></span>
+      <span class="logo-text">像素画转换器</span>
+    </div>
+
+    <nav class="nav" aria-label="主导航">
+      <button class="nav-link active" type="button" data-view="home">首页</button>
+      <button class="nav-link" type="button" data-view="about">关于</button>
+    </nav>
+
+    <button id="themeToggle" class="theme-toggle" type="button" title="切换主题" aria-label="切换主题">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.6 8.6 0 1 0 10.7 10.7z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ==================== 首页 ==================== -->
+  <section id="view-home">
+
+    <section id="upload" class="upload-section">
+      <h1 class="hero-title">一键将任何图片转换为精美像素画</h1>
+      <p class="hero-sub">拖动滑块实时预览像素效果，支持 PNG / SVG 导出，适用于游戏开发、UI 设计与数字艺术创作。</p>
+
+      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="选择或拖拽图片">
+        <div class="drop-icon">＋</div>
+        <div class="drop-title">点击选择图片，或拖拽图片到此处</div>
+        <div class="drop-hint">支持 JPG / PNG / GIF / WebP / BMP 格式 ｜ 最大 30MB ｜ 也可直接粘贴图片 (Ctrl+V)</div>
+        <input id="fileInput" type="file" accept="image/*" hidden>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace" hidden>
+
+      <div class="panel-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">原图</span>
+            <span id="srcInfo" class="panel-meta"></span>
+          </div>
+          <div class="canvas-box checker">
+            <img id="srcPreview" alt="原图预览">
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">像素画预览</span>
+            <span id="outInfo" class="panel-meta"></span>
+          </div>
+          <div class="canvas-box checker">
+            <canvas id="outCanvas"></canvas>
+            <div id="busy" class="busy" hidden>处理中…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="controls-row">
+          <div class="control">
+            <label for="pixelSize">像素大小 <span class="badge" id="pixelSizeVal">8</span></label>
+            <input id="pixelSize" type="range" min="1" max="64" step="1" value="8">
+            <div class="control-hint"><span>细节清晰</span><span>复古粗犷</span></div>
+          </div>
+
+          <div class="control">
+            <label for="colorCount">颜色数量 <span class="badge" id="colorCountVal">32</span></label>
+            <input id="colorCount" type="range" min="2" max="256" step="1" value="32">
+            <div class="control-hint"><span>2 色</span><span>256 色</span></div>
+          </div>
+        </div>
+
+        <div class="controls-row actions">
+          <div class="control export-control">
+            <label for="exportScale">导出放大倍数</label>
+            <select id="exportScale">
+              <option value="1">1×（原始尺寸）</option>
+              <option value="4">4×</option>
+              <option value="8" selected>8×</option>
+              <option value="16">16×</option>
+            </select>
+          </div>
+
+          <div class="buttons">
+            <button id="exportPng" class="btn primary" type="button">导出 PNG</button>
+            <button id="exportSvg" class="btn" type="button">导出 SVG</button>
+            <button id="resetBtn" class="btn ghost" type="button">换一张图</button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </section>
+
+  <!-- ==================== 关于 ==================== -->
+  <section id="view-about" hidden>
+
+    <div class="page-head">
+      <h1 class="page-title">关于</h1>
+      <p class="page-sub">像素画转换器是一款纯前端的在线工具，把普通照片变成复古像素风格图像。所有处理都在浏览器本地完成，图片不会被上传到任何服务器。</p>
+    </div>
+
+    <section class="features">
+      <h2 class="section-title">功能特色</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="feature-icon">⚡</div>
+          <h3>实时像素引擎</h3>
+          <p>浏览器端实时渲染，拖动像素大小即刻预览效果，无需等待服务器。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🎨</div>
+          <h3>颜色数量调节</h3>
+          <p>可调 2–256 色，在保留原图细节与呈现复古配色之间自由平衡。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📦</div>
+          <h3>多格式导出</h3>
+          <p>支持 PNG / SVG 导出，SVG 为矢量可无限放大不失真，适配游戏与网页。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔒</div>
+          <h3>隐私处理</h3>
+          <p>图片仅在你的浏览器内处理，不上传服务器，全程保护隐私。</p>
+        </div>
+      </div>
+    </section>
+
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">像素画转换器 · 纯前端实现，图片不会离开你的设备</div>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
