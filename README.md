@@ -34,8 +34,8 @@
 1. 克隆仓库
 
    ```bash
-   git clone https://github.com/<your-name>/<repo-name>.git
-   cd <repo-name>
+   git clone https://github.com/fuchenboat/pixel-art-tool.git
+   cd pixel-art-tool
    ```
 
 2. 直接打开 `index.html` 即可运行；若希望以 http 方式访问，可在项目根目录启动任意静态服务器：
@@ -74,7 +74,7 @@
 ## 项目结构
 
 ```
-像素画转换器/
+pixel-art-tool/
 ├── index.html          # 页面结构：导航、首页（上传 + 工作区）、关于、页脚
 ├── css/
 │   └── style.css       # 全部样式：主题变量、布局、组件、响应式
