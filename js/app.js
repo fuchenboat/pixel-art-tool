@@ -21,10 +21,11 @@
     pixelSize: document.getElementById('pixelSize'),
     pixelSizeVal: document.getElementById('pixelSizeVal'),
     colorCount: document.getElementById('colorCount'),
-    colorCountVal: document.getElementById('colorCountVal'),
+    colorCountNum: document.getElementById('colorCountNum'),
     exportScale: document.getElementById('exportScale'),
     exportPng: document.getElementById('exportPng'),
     exportSvg: document.getElementById('exportSvg'),
+    exportPalette: document.getElementById('exportPalette'),
     resetBtn: document.getElementById('resetBtn'),
     toast: document.getElementById('toast'),
     themeToggle: document.getElementById('themeToggle'),
@@ -43,6 +44,7 @@
     baseH: 0,
     fileName: 'pixelart',
     quantCanvas: null,  // 量化后的像素画小画布（1 像素 = 1 个方块）
+    palette: null,      // 当前量化所用调色板（[r, g, b] 数组）
     gridW: 0,
     gridH: 0,
     token: 0
@@ -183,7 +185,14 @@
       var mid = box.pixels.length >> 1;
       boxes.splice(idx, 1, makeBox(box.pixels.slice(0, mid)), makeBox(box.pixels.slice(mid)));
     }
-    return boxes.map(function (b) { return b.color; });
+    // 不同盒子可能收敛到相同的平均色，按 RGB 去重，保证导出的色板每色唯一
+    var seen = {};
+    var unique = [];
+    boxes.forEach(function (b) {
+      var key = (b.color[0] << 16) | (b.color[1] << 8) | b.color[2];
+      if (!seen[key]) { seen[key] = 1; unique.push(b.color); }
+    });
+    return unique;
   }
 
   // 5 位量化的最近色查找表，避免逐像素遍历调色板
@@ -257,6 +266,7 @@
     }
 
     var palette = samples.length ? buildPalette(samples, maxColors) : [];
+    state.palette = palette;
     var map = palette.length ? makeMapper(palette) : null;
 
     // 3. 回写量化结果
@@ -357,6 +367,24 @@
     return s.length === 1 ? '0' + s : s;
   }
 
+  // 导出 GIMP 调色板（.gpl）：纯文本格式，Aseprite / GIMP / Lospec 均可直接载入
+  function exportPalette() {
+    var palette = state.palette;
+    if (!palette || !palette.length) return;
+
+    var lines = ['GIMP Palette', 'Name: ' + state.fileName + '_palette', 'Columns: 16', '#'];
+    palette.forEach(function (c) {
+      var r = ('   ' + c[0]).slice(-3);
+      var g = ('   ' + c[1]).slice(-3);
+      var b = ('   ' + c[2]).slice(-3);
+      lines.push(r + ' ' + g + ' ' + b + '\t#' + toHex(c[0]) + toHex(c[1]) + toHex(c[2]));
+    });
+
+    download(new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' }),
+      state.fileName + '_palette_' + palette.length + 'c.gpl');
+    toast('调色板已导出（' + palette.length + ' 色 .gpl，可在 Aseprite 中载入）');
+  }
+
   /* ------------------------- 视图与主题 ------------------------- */
 
   function showView(name, scroll) {
@@ -393,9 +421,34 @@
 
   function updateLabels() {
     el.pixelSizeVal.textContent = el.pixelSize.value;
-    el.colorCountVal.textContent = el.colorCount.value;
+    if (el.colorCountNum.value !== el.colorCount.value) {
+      el.colorCountNum.value = el.colorCount.value;
+    }
     syncFill(el.pixelSize);
     syncFill(el.colorCount);
+  }
+
+  // 输入框 → 滑块：只有合法数值才实时生效，避免输入过程被打断
+  function previewColorCount() {
+    var n = parseInt(el.colorCountNum.value, 10);
+    if (isNaN(n) || n < 2 || n > 256) return;
+    if (+el.colorCount.value === n) return;
+    el.colorCount.value = n;
+    syncFill(el.colorCount);
+    scheduleRender();
+  }
+
+  // 回车 / 失焦：非法或越界输入回落到 2–256
+  function commitColorCount() {
+    var n = parseInt(el.colorCountNum.value, 10);
+    if (isNaN(n)) n = +el.colorCount.value;
+    n = Math.min(256, Math.max(2, n));
+    el.colorCountNum.value = n;
+    if (el.colorCount.value !== String(n)) {
+      el.colorCount.value = n;
+      syncFill(el.colorCount);
+      scheduleRender();
+    }
   }
 
   el.dropZone.addEventListener('click', function () { el.fileInput.click(); });
@@ -444,12 +497,16 @@
 
   el.pixelSize.addEventListener('input', function () { updateLabels(); scheduleRender(); });
   el.colorCount.addEventListener('input', function () { updateLabels(); scheduleRender(); });
+  el.colorCountNum.addEventListener('input', previewColorCount);
+  el.colorCountNum.addEventListener('change', commitColorCount);
 
   el.exportPng.addEventListener('click', exportPNG);
   el.exportSvg.addEventListener('click', exportSVG);
+  el.exportPalette.addEventListener('click', exportPalette);
   el.resetBtn.addEventListener('click', function () {
     state.baseCanvas = null;
     state.quantCanvas = null;
+    state.palette = null;
     el.srcPreview.removeAttribute('src');
     el.workspace.hidden = true;
     el.uploadSection.hidden = false;

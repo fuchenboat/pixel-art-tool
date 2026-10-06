@@ -95,7 +95,11 @@
           </div>
 
           <div class="control">
-            <label for="colorCount">颜色数量 <span class="badge" id="colorCountVal">32</span></label>
+            <div class="control-head">
+              <label for="colorCount">颜色数量</label>
+              <input id="colorCountNum" class="num-input" type="number" min="2" max="256" step="1" value="32"
+                     inputmode="numeric" title="可直接输入 2–256 之间的数字" aria-label="颜色数量，可直接输入 2 到 256 的数字">
+            </div>
             <input id="colorCount" type="range" min="2" max="256" step="1" value="32">
             <div class="control-hint"><span>2 色</span><span>256 色</span></div>
           </div>
@@ -115,6 +119,7 @@
           <div class="buttons">
             <button id="exportPng" class="btn primary" type="button">导出 PNG</button>
             <button id="exportSvg" class="btn" type="button">导出 SVG</button>
+            <button id="exportPalette" class="btn" type="button" title="导出 .gpl 调色板文件，可在 Aseprite / GIMP 中载入">导出调色板</button>
             <button id="resetBtn" class="btn ghost" type="button">换一张图</button>
           </div>
         </div>
@@ -148,7 +153,7 @@
         <div class="feature">
           <div class="feature-icon">📦</div>
           <h3>多格式导出</h3>
-          <p>支持 PNG / SVG 导出，SVG 为矢量可无限放大不失真，适配游戏与网页。</p>
+          <p>支持 PNG / SVG / GPL 调色板导出，SVG 为矢量可无限放大不失真，调色板可在 Aseprite 中直接载入，适配游戏与网页。</p>
         </div>
         <div class="feature">
           <div class="feature-icon">🔒</div>

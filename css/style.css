@@ -340,13 +340,47 @@ html, body {
   align-items: end;
 }
 
-.control label {
+.control > label,
+.control-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 10px;
+}
+
+/* 可直接输入数值的控件（与 .badge 视觉一致） */
+.num-input {
+  width: 76px;
+  padding: 2px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  outline: none;
+  cursor: text;
+  transition: border-color .18s, background .18s, box-shadow .18s;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.num-input:hover { border-color: var(--accent); }
+
+.num-input:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .badge {
