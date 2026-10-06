@@ -7,6 +7,8 @@
   var GRID_MAX_DIM = 1200;                // 像素网格最长边上限
   var GRID_MAX_PIXELS = 640000;           // 像素网格总像素上限
   var SAMPLE_LIMIT = 20000;               // 参与中位切分的最大采样像素数
+  var DENOISE_MERGE = 24;                 // 过滤杂色：合并近似色的 RGB 距离阈值
+  var DENOISE_PASSES = 2;                 // 过滤杂色：邻域多数滤波的迭代次数
 
   var el = {
     dropZone: document.getElementById('dropZone'),
@@ -22,6 +24,7 @@
     pixelSizeVal: document.getElementById('pixelSizeVal'),
     colorCount: document.getElementById('colorCount'),
     colorCountNum: document.getElementById('colorCountNum'),
+    denoise: document.getElementById('denoise'),
     exportScale: document.getElementById('exportScale'),
     exportPng: document.getElementById('exportPng'),
     exportSvg: document.getElementById('exportSvg'),
@@ -215,6 +218,95 @@
     };
   }
 
+  /* ------------------------- 过滤杂色 ------------------------- */
+
+  // 合并调色板中相互接近的颜色（按像素占比加权取平均），返回新调色板与旧→新索引映射
+  function mergePalette(palette, counts) {
+    var n = palette.length;
+    if (n < 2) return null;
+
+    var parent = new Array(n);
+    for (var i = 0; i < n; i++) parent[i] = i;
+    function find(x) {
+      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+      return x;
+    }
+
+    var t2 = DENOISE_MERGE * DENOISE_MERGE;
+    for (var a = 0; a < n; a++) {
+      for (var b = a + 1; b < n; b++) {
+        var pa = palette[a], pb = palette[b];
+        var dr = pa[0] - pb[0], dg = pa[1] - pb[1], db = pa[2] - pb[2];
+        if (dr * dr + dg * dg + db * db <= t2) parent[find(a)] = find(b);
+      }
+    }
+
+    var sumR = new Float64Array(n), sumG = new Float64Array(n);
+    var sumB = new Float64Array(n), sumW = new Float64Array(n);
+    for (i = 0; i < n; i++) {
+      var root = find(i), w = counts[i] || 1;
+      sumR[root] += palette[i][0] * w;
+      sumG[root] += palette[i][1] * w;
+      sumB[root] += palette[i][2] * w;
+      sumW[root] += w;
+    }
+
+    var rootToNew = new Int16Array(n).fill(-1);
+    var out = [];
+    for (i = 0; i < n; i++) {
+      if (find(i) !== i) continue;
+      rootToNew[i] = out.length;
+      out.push([
+        Math.round(sumR[i] / sumW[i]),
+        Math.round(sumG[i] / sumW[i]),
+        Math.round(sumB[i] / sumW[i])
+      ]);
+    }
+    if (out.length === n) return null;
+
+    var remap = new Int16Array(n);
+    for (i = 0; i < n; i++) remap[i] = rootToNew[find(i)];
+    return { palette: out, remap: remap };
+  }
+
+  // 邻域多数滤波：仅把“孤立色”改成周围占绝对多数的颜色，保留边缘与细线条
+  function majorityFilter(idx, gw, gh, colorCount) {
+    var stamp = new Int32Array(colorCount);
+    var cnt = new Int32Array(colorCount);
+    var tag = 0;
+
+    for (var pass = 0; pass < DENOISE_PASSES; pass++) {
+      var src = idx.slice();
+      for (var y = 0; y < gh; y++) {
+        for (var x = 0; x < gw; x++) {
+          var p = y * gw + x;
+          var cur = src[p];
+          if (cur < 0) continue;   // 透明像素保持不变
+
+          tag++;
+          var best = -1, bestC = 0, curC = 0;
+          for (var dy = -1; dy <= 1; dy++) {
+            var yy = y + dy;
+            if (yy < 0 || yy >= gh) continue;
+            for (var dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              var xx = x + dx;
+              if (xx < 0 || xx >= gw) continue;
+              var v = src[yy * gw + xx];
+              if (v < 0) continue;
+              if (stamp[v] !== tag) { stamp[v] = tag; cnt[v] = 1; } else { cnt[v]++; }
+              if (cnt[v] > bestC) { bestC = cnt[v]; best = v; }
+              if (v === cur) curC = cnt[v];
+            }
+          }
+          // 仅当当前色在 8 邻域里几乎不存在、且某邻居色占绝对多数时才替换
+          if (best >= 0 && best !== cur && bestC >= 6 && curC <= 1) idx[p] = best;
+        }
+      }
+    }
+    return idx;
+  }
+
   /* ------------------------- 渲染 ------------------------- */
 
   function computeGrid() {
@@ -266,21 +358,46 @@
     }
 
     var palette = samples.length ? buildPalette(samples, maxColors) : [];
-    state.palette = palette;
     var map = palette.length ? makeMapper(palette) : null;
 
-    // 3. 回写量化结果
+    // 3. 量化：把每个像素映射到调色板索引
     if (map) {
+      var idx = new Int16Array(total);
+      var counts = new Int32Array(palette.length);
       for (var j = 0; j < total; j++) {
         var k = j * 4;
-        if (data[k + 3] < 128) { data[k + 3] = 0; continue; }
-        var c = palette[map(data[k], data[k + 1], data[k + 2])];
-        data[k] = c[0];
-        data[k + 1] = c[1];
-        data[k + 2] = c[2];
+        if (data[k + 3] < 128) { idx[j] = -1; data[k + 3] = 0; continue; }
+        var pi = map(data[k], data[k + 1], data[k + 2]);
+        idx[j] = pi;
+        counts[pi]++;
         data[k + 3] = 255;
       }
+
+      // 4. 可选：过滤杂色（合并近似色 + 邻域多数滤波）
+      if (el.denoise.checked && palette.length > 1) {
+        var merged = mergePalette(palette, counts);
+        if (merged) {
+          for (j = 0; j < total; j++) {
+            if (idx[j] >= 0) idx[j] = merged.remap[idx[j]];
+          }
+          palette = merged.palette;
+        }
+        majorityFilter(idx, gw, gh, palette.length);
+      }
+
+      // 5. 回写最终颜色
+      for (j = 0; j < total; j++) {
+        var q = idx[j], o2 = j * 4;
+        if (q < 0) { data[o2 + 3] = 0; continue; }
+        var c = palette[q];
+        data[o2] = c[0];
+        data[o2 + 1] = c[1];
+        data[o2 + 2] = c[2];
+        data[o2 + 3] = 255;
+      }
     }
+
+    state.palette = palette;
 
     if (my !== state.token) return;   // 已有更新的渲染，丢弃本次结果
 
@@ -499,6 +616,7 @@
   el.colorCount.addEventListener('input', function () { updateLabels(); scheduleRender(); });
   el.colorCountNum.addEventListener('input', previewColorCount);
   el.colorCountNum.addEventListener('change', commitColorCount);
+  el.denoise.addEventListener('change', scheduleRender);
 
   el.exportPng.addEventListener('click', exportPNG);
   el.exportSvg.addEventListener('click', exportSVG);

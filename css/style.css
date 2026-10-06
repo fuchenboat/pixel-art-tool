@@ -482,6 +482,76 @@ select:focus { border-color: var(--accent); }
 
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 
+/* ---------- 过滤杂色开关 ---------- */
+.filter-row {
+  grid-template-columns: 1fr;
+  margin-top: 20px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle .track {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--track);
+  border: 1px solid var(--border);
+  transition: background .18s, border-color .18s;
+}
+
+.toggle .track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  transition: transform .18s;
+}
+
+.toggle input:checked + .track {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+}
+
+.toggle input:checked + .track::after { transform: translateX(20px); }
+
+.toggle input:focus-visible + .track { box-shadow: 0 0 0 3px var(--accent-ring); }
+
+.toggle-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.toggle-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ---------- 关于 / 功能特色 ---------- */
 .page-head {
   padding: 48px 0 8px;
